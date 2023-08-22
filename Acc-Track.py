@@ -1,38 +1,60 @@
+import sys
 import requests
 import re
-import ast
 from bs4 import BeautifulSoup
+import ast
 
-url_list = []
-letters_username = []
+# ANSI color codes
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+BLUE = "\033[94m"
+BOLD = "\033[1m"
+END_COLOR = "\033[0m"
+
+# Load URL list from the file 'url_list.py'
+url_mappings = []
+cleaned_username_chars = []
 
 with open('url_list.py') as f:
-    node = ast.parse(f.read())
+    ast_tree = ast.parse(f.read())
 
-for item in node.body:
-    if isinstance(item, ast.Assign):
-        var_name = item.targets[0].id
-        var_value = ast.literal_eval(item.value)
-        url_list.append((var_name, var_value))
+# Extract URL variables from parsed AST
+for node_item in ast_tree.body:
+    if isinstance(node_item, ast.Assign):
+        var_name = node_item.targets[0].id
+        var_value = ast.literal_eval(node_item.value)
+        url_mappings.append((var_name, var_value))
 
-username = input("Enter Username:- ")
-print("\n")
-for char in username:
+# Get username from user
+if len(sys.argv) > 1:
+    input_username = sys.argv[1]
+    print(f"{BOLD}{GREEN}Checking Usrename on :{END_COLOR} {RED}{input_username}{END_COLOR}{END_COLOR},...")
+else:
+    input_username = input(f"{YELLOW}Enter Username: {END_COLOR}")
+    print(f"{BOLD}{GREEN}Checking Usrename on :{END_COLOR} {RED}{input_username}{END_COLOR}{END_COLOR},...")
+
+# Clean up username to contain only alphanumeric characters
+for char in input_username:
     if char.isalnum():
-        letters_username.append(char)
+        cleaned_username_chars.append(char)
 
-for item in url_list:
-    url = item[1].replace("username", username)
-    response = requests.get(url)
+# Iterate through URL mappings and perform requests
+for mapping in url_mappings:
+    mapping_name, mapping_url = mapping
+    modified_url = mapping_url.replace("username", input_username)
+    response = requests.get(modified_url)
     soup = BeautifulSoup(response.content, 'html.parser')
-    title_web = soup.title
-    if title_web is not None and title_web.string is not None:
-        title = title_web.string
-        words_list = re.findall(r'\b\w+\b', title.lower())
-        words = list(set(words_list))
-        for i in range(len(letters_username)):
-            updating_name = "".join(letters_username[:i+1]).lower()
-            for word in words:
-                if updating_name == word.lower():
-                    print(item[0],"=>",url)
-
+    title_element = soup.title
+    
+    # Check if title exists and process it
+    if title_element and title_element.string:
+        title_text = title_element.string
+        words_list = re.findall(r'\b\w+\b', title_text.lower())
+        unique_words = set(words_list)
+        
+        # Check for username substrings in words
+        for i in range(len(cleaned_username_chars)):
+            current_name_segment = "".join(cleaned_username_chars[:i+1]).lower()
+            if current_name_segment in unique_words:
+                print(f"{RED}{mapping_name}{END_COLOR} {BLUE}=>{END_COLOR} {GREEN}{modified_url}{END_COLOR}")
